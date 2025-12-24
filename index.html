@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>精灵表GIF生成器</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1><i class="fas fa-film"></i> 精灵表GIF生成器</h1>
+            <p class="subtitle">上传精灵表，分割成帧，创建动画GIF</p>
+        </header>
+
+        <main>
+            <!-- 左侧控制面板 -->
+            <div class="control-panel">
+                <div class="upload-section card">
+                    <h3><i class="fas fa-upload"></i> 1. 上传精灵表</h3>
+                    <div class="upload-area" id="uploadArea">
+                        <i class="fas fa-image fa-3x"></i>
+                        <p>拖放图像文件到这里，或点击选择</p>
+                        <input type="file" id="spriteInput" accept="image/*">
+                        <div class="batch-upload">
+                            <label>
+                                <input type="checkbox" id="batchMode"> 批量模式(多张图片)
+                            </label>
+                            <input type="file" id="batchInput" accept="image/*" multiple style="display:none;">
+                        </div>
+                    </div>
+                    <div class="file-info" id="fileInfo"></div>
+                </div>
+
+                <div class="settings-section card">
+                    <h3><i class="fas fa-sliders-h"></i> 2. 分割设置</h3>
+                    <div class="form-group">
+                        <label for="rows"><i class="fas fa-grip-lines"></i> 行数:</label>
+                        <input type="number" id="rows" min="1" max="50" value="1">
+                    </div>
+                    <div class="form-group">
+                        <label for="cols"><i class="fas fa-grip-lines-vertical"></i> 列数:</label>
+                        <input type="number" id="cols" min="1" max="50" value="1">
+                    </div>
+                    <div class="form-group">
+                        <label for="frameDelay"><i class="fas fa-tachometer-alt"></i> 帧延迟(ms):</label>
+                        <input type="number" id="frameDelay" min="10" max="1000" value="100">
+                    </div>
+                    <div class="form-group">
+                        <label for="playbackSpeed"><i class="fas fa-forward"></i> 播放速度:</label>
+                        <select id="playbackSpeed">
+                            <option value="0.5">0.5x (慢)</option>
+                            <option value="1" selected>1x (正常)</option>
+                            <option value="2">2x (快)</option>
+                            <option value="3">3x (很快)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="bgColor"><i class="fas fa-fill-drip"></i> 背景:</label>
+                        <select id="bgColor">
+                            <option value="transparent">透明</option>
+                            <option value="white" selected>白色</option>
+                            <option value="black">黑色</option>
+                            <option value="#f0f0f0">浅灰</option>
+                        </select>
+                    </div>
+                    <button id="autoDetectBtn" class="btn secondary">
+                        <i class="fas fa-magic"></i> 自动检测网格
+                    </button>
+                </div>
+
+                <div class="action-section card">
+                    <h3><i class="fas fa-play-circle"></i> 3. 生成与控制</h3>
+                    <div class="button-group">
+                        <button id="generateBtn" class="btn primary">
+                            <i class="fas fa-cogs"></i> 生成GIF
+                        </button>
+                        <button id="saveBtn" class="btn success" disabled>
+                            <i class="fas fa-download"></i> 下载GIF
+                        </button>
+                        <button id="resetBtn" class="btn warning">
+                            <i class="fas fa-redo"></i> 重置
+                        </button>
+                    </div>
+                    <div class="progress-container">
+                        <div class="progress-bar" id="progressBar"></div>
+                        <div class="progress-text" id="progressText">准备就绪</div>
+                    </div>
+                    <div class="presets">
+                        <h4><i class="fas fa-layer-group"></i> 预设效果:</h4>
+                        <div class="preset-buttons">
+                            <button class="preset-btn" data-effect="reverse">反向播放</button>
+                            <button class="preset-btn" data-effect="blink">闪烁效果</button>
+                            <button class="preset-btn" data-effect="bounce">弹跳效果</button>
+                            <button class="preset-btn" data-effect="fade">淡入淡出</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="history-section card">
+                    <h3><i class="fas fa-history"></i> 历史记录</h3>
+                    <div class="history-list" id="historyList">
+                        <p class="empty-history">暂无生成记录</p>
+                    </div>
+                    <button id="clearHistoryBtn" class="btn small">清除历史</button>
+                </div>
+            </div>
+
+            <!-- 右侧预览区域 -->
+            <div class="preview-panel">
+                <div class="preview-section card">
+                    <h3><i class="fas fa-eye"></i> 预览</h3>
+                    <div class="preview-container">
+                        <div class="original-preview">
+                            <h4>原始图像</h4>
+                            <canvas id="originalCanvas"></canvas>
+                            <div class="grid-overlay" id="gridOverlay"></div>
+                        </div>
+                        <div class="gif-preview">
+                            <h4>GIF动画</h4>
+                            <div class="gif-container" id="gifContainer">
+                                <p class="empty-preview">GIF将在这里显示</p>
+                                <img id="gifOutput" style="display:none;">
+                            </div>
+                            <div class="gif-controls">
+                                <button id="playBtn" class="btn small" disabled><i class="fas fa-play"></i> 播放</button>
+                                <button id="pauseBtn" class="btn small" disabled><i class="fas fa-pause"></i> 暂停</button>
+                                <button id="stopBtn" class="btn small" disabled><i class="fas fa-stop"></i> 停止</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="frames-section card">
+                    <h3><i class="fas fa-th"></i> 帧管理 <span class="frame-count" id="frameCount">0帧</span></h3>
+                    <div class="frames-container" id="framesContainer">
+                        <p class="empty-frames">分割后的帧将显示在这里</p>
+                    </div>
+                    <div class="frame-actions">
+                        <button id="sortBtn" class="btn small"><i class="fas fa-sort"></i> 排序</button>
+                        <button id="reverseBtn" class="btn small"><i class="fas fa-exchange-alt"></i> 反转</button>
+                        <button id="clearFramesBtn" class="btn small"><i class="fas fa-trash"></i> 清空</button>
+                    </div>
+                </div>
+
+                <div class="edit-section card">
+                    <h3><i class="fas fa-edit"></i> 帧编辑</h3>
+                    <div class="edit-tools">
+                        <button class="edit-btn" data-tool="rotate"><i class="fas fa-redo"></i> 旋转</button>
+                        <button class="edit-btn" data-tool="crop"><i class="fas fa-crop"></i> 裁剪</button>
+                        <button class="edit-btn" data-tool="brightness"><i class="fas fa-sun"></i> 亮度</button>
+                        <button class="edit-btn" data-tool="contrast"><i class="fas fa-adjust"></i> 对比度</button>
+                    </div>
+                    <div class="edit-controls" id="editControls" style="display:none;">
+                        <!-- 动态加载编辑控件 -->
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <p>使用 HTML5 Canvas 和 JavaScript 构建 | 可在 GitHub Pages 部署</p>
+            <div class="footer-links">
+                <a href="#" id="githubLink"><i class="fab fa-github"></i> GitHub</a>
+                <a href="#" id="docsLink"><i class="fas fa-book"></i> 使用说明</a>
+                <a href="#" id="issueLink"><i class="fas fa-bug"></i> 报告问题</a>
+            </div>
+        </footer>
+    </div>
+
+    <!-- 模态框 - 使用说明 -->
+    <div class="modal" id="instructionsModal">
+        <div class="modal-content">
+            <span class="close-modal">&times;</span>
+            <h2><i class="fas fa-info-circle"></i> 使用说明</h2>
+            <div class="instructions">
+                <h3>如何创建GIF动画:</h3>
+                <ol>
+                    <li>上传包含多帧的精灵表图像</li>
+                    <li>设置正确的行数和列数来分割图像</li>
+                    <li>调整帧顺序、延迟时间和播放效果</li>
+                    <li>点击"生成GIF"创建动画</li>
+                    <li>下载或保存你的GIF文件</li>
+                </ol>
+                <h3>提示:</h3>
+                <ul>
+                    <li>使用"自动检测网格"功能尝试自动识别帧</li>
+                    <li>尝试不同的预设效果以获得有趣的动画</li>
+                    <li>帧延迟控制动画速度(值越小越快)</li>
+                    <li>透明背景选项适用于叠加在其他内容上</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- 脚本文件 -->
+    <script src="https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.min.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
