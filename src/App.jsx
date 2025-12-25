@@ -2258,5 +2258,281 @@ function App() {
         </div>
     );
 }
+// 假设你有一个 App.jsx 文件，以下是需要添加的批量功能代码
+import { useState, useRef } from 'react';
+import GIF from 'gif.js';
 
+function App() {
+  const [selectedFiles, setSelectedFiles] = useState([]);
+  const [processingFiles, setProcessingFiles] = useState([]);
+  const [batchProgress, setBatchProgress] = useState(0);
+  const [isBatchProcessing, setIsBatchProcessing] = useState(false);
+  
+  // 已有的状态（保持原有）
+  const [image, setImage] = useState(null);
+  const [rows, setRows] = useState(1);
+  const [cols, setCols] = useState(1);
+  const [frameOrder, setFrameOrder] = useState([]);
+  const [delay, setDelay] = useState(100);
+  const [gifUrl, setGifUrl] = useState('');
+  const canvasRef = useRef(null);
+  const fileInputRef = useRef(null);
+
+  // 处理批量文件选择
+  const handleBatchFileSelect = (e) => {
+    const files = Array.from(e.target.files);
+    setSelectedFiles(files);
+  };
+
+  // 批量生成GIF
+  const handleBatchGenerateGIFs = async () => {
+    if (selectedFiles.length === 0) return;
+    
+    setIsBatchProcessing(true);
+    setProcessingFiles([]);
+    setBatchProgress(0);
+    
+    const gifUrls = [];
+    
+    for (let i = 0; i < selectedFiles.length; i++) {
+      const file = selectedFiles[i];
+      
+      // 更新进度
+      setBatchProgress(Math.round((i / selectedFiles.length) * 100));
+      setProcessingFiles(prev => [...prev, {
+        name: file.name,
+        status: 'processing',
+        index: i
+      }]);
+      
+      try {
+        // 加载图像
+        const img = new Image();
+        img.src = URL.createObjectURL(file);
+        
+        await new Promise((resolve) => {
+          img.onload = resolve;
+        });
+        
+        // 分割图像并生成GIF（这里需要调用你已有的分割和生成GIF的逻辑）
+        const gifDataUrl = await generateGIFFromImage(img, rows, cols, delay);
+        
+        gifUrls.push({
+          name: file.name.replace(/\.[^/.]+$/, ""), // 移除扩展名
+          url: gifDataUrl,
+          blob: dataURLtoBlob(gifDataUrl)
+        });
+        
+        // 更新处理状态
+        setProcessingFiles(prev => 
+          prev.map(p => 
+            p.index === i ? { ...p, status: 'success' } : p
+          )
+        );
+        
+      } catch (error) {
+        console.error(`处理文件 ${file.name} 时出错:`, error);
+        setProcessingFiles(prev => 
+          prev.map(p => 
+            p.index === i ? { ...p, status: 'error' } : p
+          )
+        );
+      }
+    }
+    
+    setBatchProgress(100);
+    setIsBatchProcessing(false);
+    
+    // 批量下载所有GIF
+    handleBatchDownload(gifUrls);
+  };
+
+  // 批量下载
+  const handleBatchDownload = (gifUrls) => {
+    gifUrls.forEach((gif, index) => {
+      const link = document.createElement('a');
+      link.href = gif.url;
+      link.download = `${gif.name || `animation_${index + 1}`}.gif`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    });
+  };
+
+  // 生成GIF的函数（这应该是你已有的逻辑，需要稍微调整以接收参数）
+  const generateGIFFromImage = async (img, rows, cols, delay) => {
+    // 这里是你的分割和生成GIF的核心逻辑
+    // 返回一个dataURL
+    
+    return new Promise((resolve) => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      
+      // 设置canvas尺寸
+      canvas.width = img.width;
+      canvas.height = img.height;
+      
+      // 分割图像并生成帧
+      const frames = [];
+      const frameWidth = img.width / cols;
+      const frameHeight = img.height / rows;
+      
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+          const tempCanvas = document.createElement('canvas');
+          tempCanvas.width = frameWidth;
+          tempCanvas.height = frameHeight;
+          const tempCtx = tempCanvas.getContext('2d');
+          
+          tempCtx.drawImage(
+            img,
+            col * frameWidth,
+            row * frameHeight,
+            frameWidth,
+            frameHeight,
+            0,
+            0,
+            frameWidth,
+            frameHeight
+          );
+          
+          frames.push(tempCanvas);
+        }
+      }
+      
+      // 使用gif.js创建GIF
+      const gif = new GIF({
+        workers: 2,
+        quality: 10,
+        width: frameWidth,
+        height: frameHeight
+      });
+      
+      // 添加帧（这里可以按照frameOrder排序）
+      const orderedFrames = frameOrder.length > 0 ? 
+        frameOrder.map(i => frames[i]) : frames;
+      
+      orderedFrames.forEach(frame => {
+        gif.addFrame(frame, { delay: delay });
+      });
+      
+      gif.on('finished', (blob) => {
+        const url = URL.createObjectURL(blob);
+        resolve(url);
+      });
+      
+      gif.render();
+    });
+  };
+
+  // 辅助函数：将dataURL转换为Blob
+  const dataURLtoBlob = (dataURL) => {
+    const arr = dataURL.split(',');
+    const mime = arr[0].match(/:(.*?);/)[1];
+    const bstr = atob(arr[1]);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    
+    while (n--) {
+      u8arr[n] = bstr.charCodeAt(n);
+    }
+    
+    return new Blob([u8arr], { type: mime });
+  };
+
+  // 清空批量文件列表
+  const clearBatchFiles = () => {
+    setSelectedFiles([]);
+    setProcessingFiles([]);
+    setBatchProgress(0);
+  };
+
+  return (
+    <div className="app">
+      {/* 已有的单个文件上传界面 */}
+      
+      {/* 批量处理区域 */}
+      <div className="batch-section">
+        <h3>批量处理</h3>
+        
+        <div className="batch-controls">
+          <input
+            type="file"
+            id="batch-file-input"
+            accept="image/*"
+            multiple
+            onChange={handleBatchFileSelect}
+            style={{ display: 'none' }}
+            ref={fileInputRef}
+          />
+          
+          <div className="batch-buttons">
+            <button 
+              onClick={() => fileInputRef.current?.click()}
+              className="btn"
+            >
+              选择多张图片
+            </button>
+            
+            {selectedFiles.length > 0 && (
+              <>
+                <button
+                  onClick={handleBatchGenerateGIFs}
+                  disabled={isBatchProcessing}
+                  className="btn btn-primary"
+                >
+                  {isBatchProcessing ? '处理中...' : '批量生成GIF'}
+                </button>
+                
+                <button
+                  onClick={clearBatchFiles}
+                  className="btn btn-secondary"
+                >
+                  清空列表
+                </button>
+              </>
+            )}
+          </div>
+          
+          {/* 批量文件列表 */}
+          {selectedFiles.length > 0 && (
+            <div className="batch-file-list">
+              <h4>已选择 {selectedFiles.length} 个文件:</h4>
+              <ul>
+                {selectedFiles.map((file, index) => (
+                  <li key={index}>
+                    {file.name}
+                    {processingFiles[index] && (
+                      <span className={`status ${processingFiles[index].status}`}>
+                        {processingFiles[index].status === 'processing' ? '处理中...' : 
+                         processingFiles[index].status === 'success' ? '✓' : '✗'}
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          
+          {/* 进度条 */}
+          {isBatchProcessing && (
+            <div className="batch-progress">
+              <div className="progress-bar">
+                <div 
+                  className="progress-fill" 
+                  style={{ width: `${batchProgress}%` }}
+                ></div>
+              </div>
+              <span>{batchProgress}%</span>
+            </div>
+          )}
+        </div>
+        
+        <div className="batch-info">
+          <p><small>提示：可以一次选择多张精灵图，每张图都会按照当前设置生成单独的GIF</small></p>
+        </div>
+      </div>
+    </div>
+  );
+}
 export default App;
